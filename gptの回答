@@ -1,92 +1,78 @@
-このPythonスクリプトを実行すると、**アメリカと日本の景気循環（ビジネスサイクル）分析**が自動で行われ、次のような段階を経て処理が進みます。
+修正済みのPythonスクリプト全文
+以下は、「日本の実質GDPデータ」に対してHPフィルターをλ=10, 100, 1600で適用し、結果を比較・可視化する完全なスクリプトです。
 
----
+python
+コピーする
+編集する
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import statsmodels.api as sm
+from pandas_datareader import data as web
 
-### 🔹 **第1段階：モジュールのインポートと設定**
+# ---- 設定 ----
+plt.style.use('ggplot')
+start_date = '1980-01-01'
+end_date = '2022-01-01'
+country_code = 'JP'
+gdp_series_id = 'JPNRGDPEXP'  # 日本の実質GDP (FRED)
 
-* `pandas`, `matplotlib`, `statsmodels`, `numpy` など、必要なライブラリを読み込み。
-* `matplotlib` のグラフスタイルを `ggplot` に設定し、カラーパレットも調整。
+# ---- 1. データ取得 ----
+gdp = web.DataReader(gdp_series_id, 'fred', start_date, end_date)
+gdp.dropna(inplace=True)
 
----
+# ---- 2. 自然対数変換 ----
+log_gdp = np.log(gdp)
 
-### 🔹 **第2段階：データ取得 (`get_macro_data`)**
+# ---- 3. HPフィルターの適用（λ=10, 100, 1600） ----
+lambdas = [10, 100, 1600]
+trends = {}
+cycles = {}
 
-関数 `get_macro_data` を使って、\*\*FRED（アメリカ連邦準備銀行の経済データベース）\*\*から以下のデータを1980年～2022年の範囲で取得：
+for lam in lambdas:
+    cycle, trend = sm.tsa.filters.hpfilter(log_gdp, lamb=lam)
+    trends[lam] = trend
+    cycles[lam] = cycle
 
-#### アメリカ（US）：
+# ---- 4. 可視化 ----
 
-* 実質GDP（GDPC1）
-* 個人消費（PCECC96）
-* 民間投資（GPDIC1）
+# グラフ1：元データとトレンド成分
+plt.figure(figsize=(12, 6))
+plt.plot(log_gdp, label='Log Real GDP', color='black', linewidth=2)
+for lam in lambdas:
+    plt.plot(trends[lam], label=f'Trend (λ={lam})')
+plt.title('Japan Log Real GDP and HP Trends (λ=10, 100, 1600)')
+plt.xlabel('Date')
+plt.ylabel('Log GDP')
+plt.legend()
+plt.tight_layout()
+plt.savefig("japan_gdp_trends.png", dpi=300)
+plt.show()
 
-#### 日本（JP）：
+# グラフ2：循環成分の比較
+plt.figure(figsize=(12, 6))
+for lam in lambdas:
+    plt.plot(cycles[lam], label=f'Cycle (λ={lam})')
+plt.title('Japan GDP Cyclical Component via HP Filter')
+plt.xlabel('Date')
+plt.ylabel('Deviation from Trend (log)')
+plt.axhline(0, color='black', linestyle='--', linewidth=1)
+plt.legend()
+plt.tight_layout()
+plt.savefig("japan_gdp_cycles.png", dpi=300)
+plt.show()
+📊 補足説明
+λ=10： トレンドがより細かく動く → 循環成分はより滑らかで小さくなる
 
-* 実質GDP（JPNRGDPEXP）
-* 民間最終消費支出（JPNPFCEADSMEI）
-* 総固定資本形成（JPNGFCFADSMEI）
+λ=1600（推奨）： 標準的な四半期データ向けのスムージング → トレンドが滑らかで、循環成分が景気変動をよく反映
 
-失敗したデータは `None` に設定され、エラーが表示される。
+λ=100： 中間的な滑らかさ
 
----
+🔄 実行方法
+このスクリプトを gdp_hpfilter_analysis.py のようなファイルに保存し、ターミナルまたはコマンドプロンプトで以下のように実行します：
 
-### 🔹 **第3段階：データ処理 (`process_cycle_data`)**
-
-各変数の系列に対して以下の処理を実行：
-
-1. **対数変換（log）**：成長率変化を安定化するため。
-2. **HPフィルター（Hodrick-Prescott）**：
-
-   * `lambda = 1600`（四半期データに標準的）
-   * トレンド成分と循環成分（景気循環）を分離。
-
----
-
-### 🔹 **第4段階：統計量の計算 (`calculate_statistics`)**
-
-各国の循環成分（サイクル）から以下を計算：
-
-* **Volatility（変動性）**：標準偏差×100（％表現）
-* **Persistence（持続性）**：自己相関（ラグ1）
-* **Correlation with GDP（GDPとの相関）**
-
----
-
-### 🔹 **第5段階：統計テーブル作成 (`create_statistics_table`)**
-
-* アメリカと日本の各変数（GDP・消費・投資）の3つの統計量を、マルチインデックス付きのDataFrameにまとめる。
-* テーブルがコンソールに表示される。
-
----
-
-### 🔹 **第6段階：トレンドとサイクルのグラフ描画 (`plot_trends_and_cycles`)**
-
-アメリカ・日本それぞれに対して：
-
-* **左列**：元データの対数とHPフィルターによるトレンドのグラフ。
-* **右列**：サイクル成分（景気循環）のグラフ。
-
-各国ごとに `.png` 画像として保存。
-
----
-
-### 🔹 **第7段階：両国のサイクル比較グラフの作成**
-
-* アメリカと日本の循環成分を **同一グラフ内に重ねて表示**。
-* 変数ごとに（GDP・消費・投資）計3枚の比較グラフが作成され、`us_japan_cycle_comparison.png` として保存。
-
----
-
-### ✅ **最終的な出力**
-
-1. 統計テーブル（コンソールに表示）
-2. 3枚のPNGファイル：
-
-   * `united_states_trends_and_cycles.png`
-   * `japan_trends_and_cycles.png`
-   * `us_japan_cycle_comparison.png`
-
----
-
-このスクリプトにより、**アメリカと日本の景気変動の特徴（ボラティリティ・持続性・GDPとの関係）を比較・視覚化**することができます。
-
-必要なら、これをJupyter Notebookで使いやすくしたり、Excel出力などに拡張することもできます。どこを改良したいですか？
+bash
+コピーする
+編集する
+python gdp_hpfilter_analysis.py
+PNGファイルとして2枚の図 (japan_gdp_trends.png と japan_gdp_cycles.png) が保存されます。
