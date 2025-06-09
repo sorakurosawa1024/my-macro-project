@@ -77,7 +77,7 @@ avg_row_data = {
 }
 results_df = pd.concat([results_df, pd.DataFrame([avg_row_data])], ignore_index=True)
 
-print("\nGrowth Accounting in OECD Countries: 1970-2010 period")
+print("\nGrowth Accounting in OECD Countries: 1990-2019 period")
 print("="*85)
 print(results_df.to_string(index=False))
 
